@@ -37,7 +37,6 @@ func TestCanProc(t *testing.T) {
 
 // TestSearch
 func TestSearch(t *testing.T) {
-	t.Log("zero")
 	done := make(chan interface{})
 	ch := make(chan FInfo)
 	fName := "text.txt"
@@ -52,9 +51,8 @@ func TestSearch(t *testing.T) {
 looper:
 	for {
 		select {
-		case val := <-ch:
+		case <-ch:
 			counter += 1
-			t.Logf("file input:%s\n", val.FileInfo.Name())
 		case <-done:
 			break looper
 		case <-time.After(10 * time.Second):
@@ -64,5 +62,21 @@ looper:
 	}
 	if counter <= 0 {
 		t.Error("not counted")
+	}
+}
+
+// TestMove
+func TestMove(t *testing.T) {
+	fileName := "dummy.file"
+	from := filepath.Join(conf.GoproRoot, fileName)
+	to := filepath.Join(conf.SavePath, fileName)
+	f, err := os.Create(from)
+	defer f.Close()
+	if err != nil {
+		t.Error("create error")
+	}
+	err = moveProcess(from, to)
+	if err != nil {
+		t.Error(err.Error())
 	}
 }

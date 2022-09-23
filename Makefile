@@ -3,3 +3,6 @@ build:
 
 test:
 	go test ./...
+
+detail:
+	go test -v ./...

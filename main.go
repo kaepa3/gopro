@@ -23,6 +23,7 @@ package main
 
 import "gopro/cmd"
 
+// main
 func main() {
 	cmd.Execute()
 }

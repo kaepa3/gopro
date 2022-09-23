@@ -68,7 +68,10 @@ loopLabel:
 		select {
 		case f := <-ch:
 			wg.Add(1)
-			if err := moveProcess(f, conf.SavePath); err != nil {
+			from := filepath.Join(f.Root, f.FileInfo.Name())
+			to := filepath.Join(conf.SavePath, f.FileInfo.Name())
+			fmt.Printf("%s -> %s", from, to)
+			if err := moveProcess(from, to); err != nil {
 				fmt.Println(err.Error())
 			}
 			wg.Done()
@@ -76,22 +79,17 @@ loopLabel:
 			break loopLabel
 		}
 	}
-	fmt.Println("done")
 	wg.Wait()
 }
 
-// copyProcess
-func moveProcess(f FInfo, to string) error {
-	fromPath := filepath.Join(f.Root, f.FileInfo.Name())
-	dstPath := filepath.Join(to, f.FileInfo.Name())
-	fmt.Printf("%s -> %s", fromPath, dstPath)
-
-	src, err := os.Open(fromPath)
+// move`Process
+func moveProcess(from string, to string) error {
+	src, err := os.Open(from)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
-	dst, err := os.Create(dstPath)
+	dst, err := os.Create(to)
 	if err != nil {
 		return err
 	}

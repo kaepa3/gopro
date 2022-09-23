@@ -91,4 +91,20 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
+
+	if err := viper.Unmarshal(&conf); err != nil {
+		fmt.Println("config file Unmarshal error")
+		fmt.Println(err)
+		fmt.Printf("%s:cfg \n", cfgFile)
+	}
+	return
 }
+
+type Config struct {
+	GoproRoot string `yaml:"goproroot"`
+	SavePath  string `yaml:"savepath"`
+}
+
+var (
+	conf Config
+)
