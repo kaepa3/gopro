@@ -21,7 +21,7 @@ THE SOFTWARE.
 */
 package main
 
-import "gopro/cmd"
+import "gpr/cmd"
 
 // main
 func main() {
