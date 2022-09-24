@@ -86,7 +86,7 @@ func moving(wg *sync.WaitGroup, f FInfo) {
 
 	from := filepath.Join(f.Root, f.FileInfo.Name())
 	to := filepath.Join(savePath, f.FileInfo.Name())
-	fmt.Printf("%s -> %s", from, to)
+	fmt.Printf("%s -> %s\n", from, to)
 	if err := moveProcess(from, to); err != nil {
 		fmt.Println(err.Error())
 	}
@@ -106,7 +106,7 @@ func createFolderIfNeed(folderPath string) {
 
 // createFolderName
 func createFolderName(t time.Time) string {
-	return t.Format("2006-01-02-15-04-05")
+	return t.Format("2006-01-02")
 }
 
 // move`Process
