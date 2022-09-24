@@ -52,6 +52,10 @@ type FInfo struct {
 
 // move file cmd
 func move(cmd *cobra.Command, args []string) {
+	v, err := cmd.Flags().GetBool("del")
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 	if err := canProc(); err != nil {
 		fmt.Printf("error :%s\n", err.Error())
 		return
@@ -59,10 +63,10 @@ func move(cmd *cobra.Command, args []string) {
 	done := make(chan interface{})
 	ch := make(chan FInfo)
 	go searchDir(conf.GoproRoot, ch, done)
-	procMessage(ch, done)
+	procMessage(ch, done, !v)
 }
 
-func procMessage(ch <-chan FInfo, loopDone <-chan interface{}) {
+func procMessage(ch <-chan FInfo, loopDone <-chan interface{}, del bool) {
 	wg := sync.WaitGroup{}
 
 loopLabel:
@@ -70,7 +74,7 @@ loopLabel:
 		select {
 		case f := <-ch:
 			wg.Add(1)
-			go moving(&wg, f)
+			go moving(&wg, f, del)
 		case <-loopDone:
 			break loopLabel
 		}
@@ -79,7 +83,7 @@ loopLabel:
 }
 
 // moving
-func moving(wg *sync.WaitGroup, f FInfo) {
+func moving(wg *sync.WaitGroup, f FInfo, del bool) {
 	defer wg.Done()
 	folderName := createFolderName(f.FileInfo.ModTime())
 	savePath := filepath.Join(conf.SavePath, folderName)
@@ -90,6 +94,10 @@ func moving(wg *sync.WaitGroup, f FInfo) {
 	fmt.Printf("%s -> %s\n", from, to)
 	if err := moveProcess(from, to); err != nil {
 		fmt.Println(err.Error())
+	}
+
+	if del {
+		fmt.Printf("del:%s\n", from)
 	}
 }
 
