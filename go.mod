@@ -1,4 +1,4 @@
-module gopro
+module gpr
 
 go 1.19
 
