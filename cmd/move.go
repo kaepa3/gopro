@@ -31,6 +31,7 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
+	moveCmd.Flags().BoolP("del", "d", false, "non delete")
 	rootCmd.AddCommand(moveCmd)
 
 	// Here you will define your flags and configuration settings.
