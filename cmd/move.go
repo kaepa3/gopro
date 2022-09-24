@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -54,10 +55,10 @@ func move(cmd *cobra.Command, args []string) {
 		fmt.Printf("error :%s\n", err.Error())
 		return
 	}
-	lDone := make(chan interface{})
+	done := make(chan interface{})
 	ch := make(chan FInfo)
-	go searchDir(conf.GoproRoot, ch, lDone)
-	procMessage(ch, lDone)
+	go searchDir(conf.GoproRoot, ch, done)
+	procMessage(ch, done)
 }
 
 func procMessage(ch <-chan FInfo, loopDone <-chan interface{}) {
@@ -68,18 +69,44 @@ loopLabel:
 		select {
 		case f := <-ch:
 			wg.Add(1)
-			from := filepath.Join(f.Root, f.FileInfo.Name())
-			to := filepath.Join(conf.SavePath, f.FileInfo.Name())
-			fmt.Printf("%s -> %s", from, to)
-			if err := moveProcess(from, to); err != nil {
-				fmt.Println(err.Error())
-			}
-			wg.Done()
+			go moving(&wg, f)
 		case <-loopDone:
 			break loopLabel
 		}
 	}
 	wg.Wait()
+}
+
+// moving
+func moving(wg *sync.WaitGroup, f FInfo) {
+	defer wg.Done()
+	folderName := createFolderName(f.FileInfo.ModTime())
+	savePath := filepath.Join(conf.SavePath, folderName)
+	createFolderIfNeed(savePath)
+
+	from := filepath.Join(f.Root, f.FileInfo.Name())
+	to := filepath.Join(savePath, f.FileInfo.Name())
+	fmt.Printf("%s -> %s", from, to)
+	if err := moveProcess(from, to); err != nil {
+		fmt.Println(err.Error())
+	}
+}
+
+// createFolderIfNeed
+func createFolderIfNeed(folderPath string) {
+	info, err := os.Stat(folderPath)
+	if err == nil {
+		if info.IsDir() {
+			fmt.Printf("same file exits:%s\n", folderPath)
+		}
+	} else {
+		os.Mkdir(folderPath, 0777)
+	}
+}
+
+// createFolderName
+func createFolderName(t time.Time) string {
+	return t.Format("2006-01-02-15-04-05")
 }
 
 // move`Process
