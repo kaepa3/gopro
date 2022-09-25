@@ -4,16 +4,15 @@ Copyright © 2022 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sync"
+	"strings"
 	"time"
 
+	"github.com/kaepa3/go-mtpfs/mtp"
 	"github.com/spf13/cobra"
 )
 
@@ -45,67 +44,45 @@ func init() {
 	// moveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-type FInfo struct {
-	FileInfo fs.FileInfo
-	Root     string
+type MtpInfo struct {
+	MtpObjInfo *mtp.ObjectInfo
+	Handle     uint32
 }
 
 // move file cmd
 func move(cmd *cobra.Command, args []string) {
-	v, err := cmd.Flags().GetBool("del")
+	err, dev, delFlg := initCommand(cmd)
 	if err != nil {
-		fmt.Println(err.Error())
-	}
-	if err := canProc(); err != nil {
 		fmt.Printf("error :%s\n", err.Error())
 		return
 	}
-	done := make(chan interface{})
-	ch := make(chan FInfo)
-	go searchDir(conf.GoproRoot, ch, done)
-	procMessage(ch, done, !v)
+	defer dev.Close()
+	fmt.Println(dev.ID())
+
+	searchDir(dev, delFlg)
 }
 
-func procMessage(ch <-chan FInfo, loopDone <-chan interface{}, del bool) {
-	wg := sync.WaitGroup{}
-
-loopLabel:
-	for {
-		select {
-		case f := <-ch:
-			wg.Add(1)
-			go moving(&wg, f, del)
-		case <-loopDone:
-			break loopLabel
-		}
+// initCommand
+func initCommand(cmd *cobra.Command) (error, *mtp.Device, bool) {
+	v, err := cmd.Flags().GetBool("del")
+	if err != nil {
+		return err, nil, v
 	}
-	wg.Wait()
-}
-
-// moving
-func moving(wg *sync.WaitGroup, f FInfo, del bool) {
-	defer wg.Done()
-	folderName := createFolderName(f.FileInfo.ModTime())
-	savePath := filepath.Join(conf.SavePath, folderName)
-	createFolderIfNeed(savePath)
-
-	from := filepath.Join(f.Root, f.FileInfo.Name())
-	to := filepath.Join(savePath, f.FileInfo.Name())
-	fmt.Printf("%s -> %s\n", from, to)
-	if err := moveProcess(from, to); err != nil {
-		fmt.Println(err.Error())
+	if err := canProc(); err != nil {
+		return err, nil, v
 	}
-
-	if del {
-		fmt.Printf("del:%s\n", from)
+	dev, err := GetGopro()
+	if err != nil {
+		return err, nil, v
 	}
+	return nil, dev, v
 }
 
 // createFolderIfNeed
 func createFolderIfNeed(folderPath string) {
 	info, err := os.Stat(folderPath)
 	if err == nil {
-		if info.IsDir() {
+		if !info.IsDir() {
 			fmt.Printf("same file exits:%s\n", folderPath)
 		}
 	} else {
@@ -118,20 +95,15 @@ func createFolderName(t time.Time) string {
 	return t.Format("2006-01-02")
 }
 
-// move`Process
-func moveProcess(from string, to string) error {
-	src, err := os.Open(from)
+// moveProcess
+func writeFile(dev *mtp.Device, handle uint32, name string) error {
+	fs, err := os.Create(name)
 	if err != nil {
 		return err
 	}
-	defer src.Close()
-	dst, err := os.Create(to)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, src)
+	defer fs.Close()
+	writer := bufio.NewWriter(fs)
+	err = dev.GetObject(handle, writer)
 	if err != nil {
 		return err
 	}
@@ -139,24 +111,60 @@ func moveProcess(from string, to string) error {
 }
 
 // searchDir
-func searchDir(path string, ch chan<- FInfo, done chan interface{}) {
-	defer close(done)
-	files, err := ioutil.ReadDir(path)
+func searchDir(dev *mtp.Device, isDel bool) {
+	sids := mtp.Uint32Array{}
+	err := dev.GetStorageIDs(&sids)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(err.Error())
 		return
 	}
-	for _, f := range files {
-		info := FInfo{FileInfo: f, Root: path}
-		ch <- info
+
+	for _, id := range sids.Values {
+		err, handles := getHandles(dev, id)
+		if err != nil {
+			fmt.Println(err.Error())
+		} else {
+			transferObject(dev, handles)
+		}
 	}
 }
 
-func canProc() error {
-	if !isExistDir(conf.GoproRoot) {
-		return errors.New(fmt.Sprintf("gopro not exist:%s\n", conf.GoproRoot))
-
+func transferObject(dev *mtp.Device, handles []uint32) {
+	for _, handle := range handles {
+		var oi mtp.ObjectInfo
+		dev.GetObjectInfo(handle, &oi)
+		if strings.Contains(oi.Filename, "MP4") {
+			folderName := createFolderName(oi.ModificationDate)
+			savePath := filepath.Join(conf.SavePath, folderName)
+			createFolderIfNeed(savePath)
+			to := filepath.Join("save", oi.Filename)
+			fmt.Printf("%s -> %s\n", oi.Filename, to)
+			writeFile(dev, handle, to)
+		}
 	}
+}
+
+// storagehandle
+func getHandles(dev *mtp.Device, id uint32) (error, []uint32) {
+	hs := mtp.Uint32Array{}
+	err := dev.GetObjectHandles(id, 0x0, 0x0, &hs)
+	if err != nil {
+		return err, nil
+	}
+	return nil, hs.Values
+}
+
+// GetGopro
+func GetGopro() (*mtp.Device, error) {
+	dev, err := mtp.SelectDevice("GoPro")
+	if err != nil {
+		return nil, err
+	}
+	dev.Configure()
+	return dev, nil
+}
+
+func canProc() error {
 	if !isExistDir(conf.SavePath) {
 		return errors.New(fmt.Sprintf("save dir not exist:%s\n", conf.SavePath))
 	}

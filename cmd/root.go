@@ -101,8 +101,7 @@ func initConfig() {
 }
 
 type Config struct {
-	GoproRoot string `yaml:"goproroot"`
-	SavePath  string `yaml:"savepath"`
+	SavePath string `yaml:"savepath"`
 }
 
 var (
