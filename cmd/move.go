@@ -58,8 +58,7 @@ func move(cmd *cobra.Command, args []string) {
 	}
 	defer dev.Close()
 	fmt.Println(dev.ID())
-
-	searchDir(dev, delFlg)
+	searchDir(dev, !delFlg)
 }
 
 // initCommand
@@ -124,12 +123,12 @@ func searchDir(dev *mtp.Device, isDel bool) {
 		if err != nil {
 			fmt.Println(err.Error())
 		} else {
-			transferObject(dev, handles)
+			transferObject(dev, handles, isDel)
 		}
 	}
 }
 
-func transferObject(dev *mtp.Device, handles []uint32) {
+func transferObject(dev *mtp.Device, handles []uint32, isDel bool) {
 	for _, handle := range handles {
 		var oi mtp.ObjectInfo
 		dev.GetObjectInfo(handle, &oi)
@@ -137,10 +136,20 @@ func transferObject(dev *mtp.Device, handles []uint32) {
 			folderName := createFolderName(oi.ModificationDate)
 			savePath := filepath.Join(conf.SavePath, folderName)
 			createFolderIfNeed(savePath)
-			to := filepath.Join("save", oi.Filename)
+			to := filepath.Join(savePath, oi.Filename)
 			fmt.Printf("%s -> %s\n", oi.Filename, to)
 			writeFile(dev, handle, to)
+			if isDel {
+				deleteObject(dev, handle)
+			}
 		}
+	}
+}
+
+func deleteObject(dev *mtp.Device, handle uint32) {
+
+	if err := dev.DeleteObject(handle); err != nil {
+		fmt.Println(err.Error())
 	}
 }
 
