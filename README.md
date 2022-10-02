@@ -1,5 +1,7 @@
 # gopro
 
+![logo](./logo.png "logo")
+
 for transfer gopro movies
 
 # install
